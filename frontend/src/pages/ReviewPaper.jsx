@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { papersAPI, reviewsAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import { Star, CheckCircle } from 'lucide-react'
+import { Star, CheckCircle, FileText, Download } from 'lucide-react'
 
 const RECOMMENDATIONS = [
   { value: 'accept',         label: 'Accept',         desc: 'Ready for publication',                color: 'border-accent-green/50 bg-accent-green/10 text-accent-green' },
@@ -69,7 +69,7 @@ export default function ReviewPaper() {
           <div className="glass-card p-6 mb-6 border-accent-cyan/15">
             <div className="text-xs text-accent-cyan font-semibold mb-2 uppercase tracking-wide">Paper Under Review</div>
             <h2 className="font-display text-xl font-bold text-slate-100 mb-2">{paper.title}</h2>
-            <p className="text-sm text-slate-400 leading-relaxed line-clamp-3">{paper.abstract}</p>
+            <p className="text-sm text-slate-400 leading-relaxed max-h-32 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-dark-500 scrollbar-track-transparent">{paper.abstract}</p>
             <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
               <span>{paper.submittedBy?.name}</span>
               <span>•</span>
@@ -77,6 +77,21 @@ export default function ReviewPaper() {
               <span>•</span>
               <span>{new Date(paper.createdAt).toLocaleDateString()}</span>
             </div>
+            {/* Document Download */}
+            {paper.fileUrl && (
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <a 
+                  href={`http://localhost:5000${paper.fileUrl}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20 hover:bg-accent-cyan/20 transition-colors text-sm"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Full Paper
+                  <Download className="w-4 h-4" />
+                </a>
+              </div>
+            )}
           </div>
         )}
 

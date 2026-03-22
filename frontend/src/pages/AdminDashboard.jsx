@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import StatusBadge from '../components/StatusBadge'
-import { papersAPI, usersAPI, blockchainAPI } from '../services/api'
+import { papersAPI, usersAPI, blockchainAPI, reviewsAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import { Shield, FileText, Users, CheckCircle, Link2, ChevronDown } from 'lucide-react'
+import { Shield, FileText, Users, CheckCircle, Link2, ChevronDown, Eye, MessageSquare } from 'lucide-react'
 
 const STATUS_OPTIONS = [
   { value: 'submitted',        label: 'Submitted' },
@@ -21,38 +21,67 @@ export default function AdminDashboard() {
   const [filter, setFilter] = useState('all')
   const [assignModal, setAssignModal] = useState(null) // paperId
   const [selectedReviewer, setSelectedReviewer] = useState('')
+  const [reviewsModal, setReviewsModal] = useState(null) // paperId
+  const [paperReviews, setPaperReviews] = useState([])
 
   useEffect(() => {
-    Promise.all([
-      papersAPI.getAllAdmin(),
-      usersAPI.getReviewers(),
-      blockchainAPI.getStatus(),
-    ])
-      .then(([pr, rr, bc]) => {
-        setPapers(pr.data.papers)
-        setReviewers(rr.data.reviewers)
-        setBlockchainStatus(bc.data)
-      })
-      .catch(e => toast.error(e.message))
-      .finally(() => setLoading(false))
+    fetchData()
   }, [])
+
+  const fetchData = async () => {
+    try {
+      const [pr, rr, bc] = await Promise.all([
+        papersAPI.getAllAdmin(),
+        usersAPI.getReviewers(),
+        blockchainAPI.getStatus(),
+      ])
+      // Fetch reviews for each paper to show recommendations
+      const papersWithReviews = await Promise.all(
+        pr.data.papers.map(async (paper) => {
+          try {
+            const reviewsRes = await reviewsAPI.getByPaper(paper._id)
+            return { ...paper, reviews: reviewsRes.data.reviews }
+          } catch {
+            return { ...paper, reviews: [] }
+          }
+        })
+      )
+      setPapers(papersWithReviews)
+      setReviewers(rr.data.reviewers)
+      setBlockchainStatus(bc.data)
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const updateStatus = async (paperId, status) => {
     try {
-      const res = await papersAPI.updateStatus(paperId, status)
-      setPapers(prev => prev.map(p => p._id === paperId ? res.data.paper : p))
+      await papersAPI.updateStatus(paperId, status)
       toast.success('Status updated')
+      // Refresh data to get updated paper with reviews
+      await fetchData()
     } catch (e) { toast.error(e.message) }
   }
 
   const assignReviewer = async () => {
     if (!selectedReviewer) return toast.error('Select a reviewer')
     try {
-      const res = await papersAPI.assignReviewer(assignModal, selectedReviewer)
-      setPapers(prev => prev.map(p => p._id === assignModal ? res.data.paper : p))
+      await papersAPI.assignReviewer(assignModal, selectedReviewer)
       toast.success('Reviewer assigned')
       setAssignModal(null)
       setSelectedReviewer('')
+      // Refresh data to get updated paper
+      await fetchData()
+    } catch (e) { toast.error(e.message) }
+  }
+
+  const viewReviews = async (paperId) => {
+    try {
+      const res = await reviewsAPI.getByPaper(paperId)
+      setPaperReviews(res.data.reviews)
+      setReviewsModal(paperId)
     } catch (e) { toast.error(e.message) }
   }
 
@@ -121,6 +150,7 @@ export default function AdminDashboard() {
                 <th className="text-left px-5 py-3">Author</th>
                 <th className="text-left px-5 py-3">Status</th>
                 <th className="text-left px-5 py-3">Reviewers</th>
+                <th className="text-left px-5 py-3">Recommendations</th>
                 <th className="text-left px-5 py-3">Actions</th>
               </tr>
             </thead>
@@ -128,13 +158,13 @@ export default function AdminDashboard() {
               {loading ? (
                 Array(5).fill(0).map((_, i) => (
                   <tr key={i} className="border-b border-white/5">
-                    <td colSpan={5} className="px-5 py-4">
+                    <td colSpan={6} className="px-5 py-4">
                       <div className="h-4 bg-dark-600 rounded animate-pulse w-full" />
                     </td>
                   </tr>
                 ))
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-500">No papers found</td></tr>
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">No papers found</td></tr>
               ) : (
                 filtered.map(paper => (
                   <tr key={paper._id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
@@ -154,6 +184,24 @@ export default function AdminDashboard() {
                       </div>
                     </td>
                     <td className="px-5 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {paper.reviews?.length > 0 ? (
+                          paper.reviews.map((review, idx) => (
+                            <span key={idx} className={`text-xs px-2 py-0.5 rounded-full ${
+                              review.recommendation === 'accept' ? 'bg-accent-green/20 text-accent-green' :
+                              review.recommendation === 'minor_revision' ? 'bg-accent-cyan/20 text-accent-cyan' :
+                              review.recommendation === 'major_revision' ? 'bg-accent-amber/20 text-accent-amber' :
+                              'bg-red-500/20 text-red-400'
+                            }`}>
+                              {review.recommendation?.replace('_', ' ')}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-slate-600">Pending</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
                         {/* Status select */}
                         <div className="relative">
@@ -167,6 +215,12 @@ export default function AdminDashboard() {
                           </select>
                           <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
                         </div>
+                        {/* View Reviews */}
+                        <button onClick={() => viewReviews(paper._id)}
+                          className="px-2 py-1.5 rounded-lg bg-accent-purple/10 text-accent-purple text-xs border border-accent-purple/20 hover:bg-accent-purple/20 transition-colors">
+                          <Eye className="w-3 h-3 inline mr-1" />
+                          Reviews
+                        </button>
                         {/* Assign reviewer */}
                         <button onClick={() => setAssignModal(paper._id)}
                           className="px-2 py-1.5 rounded-lg bg-accent-cyan/10 text-accent-cyan text-xs border border-accent-cyan/20 hover:bg-accent-cyan/20 transition-colors">
@@ -197,6 +251,70 @@ export default function AdminDashboard() {
               <button onClick={assignReviewer} className="btn-primary flex-1">Assign</button>
               <button onClick={() => { setAssignModal(null); setSelectedReviewer('') }} className="btn-secondary flex-1">Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reviews Modal */}
+      {reviewsModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4">
+          <div className="glass-card p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-semibold text-slate-100 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-accent-purple" />
+                Reviews
+              </h3>
+              <button onClick={() => { setReviewsModal(null); setPaperReviews([]) }} className="text-slate-400 hover:text-slate-200">
+                ✕
+              </button>
+            </div>
+            {paperReviews.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">No reviews submitted yet</div>
+            ) : (
+              <div className="space-y-4">
+                {paperReviews.map(review => (
+                  <div key={review._id} className="bg-dark-600/40 rounded-xl p-4 border border-white/5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm font-medium text-slate-200">{review.reviewer?.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          review.recommendation === 'accept' ? 'bg-accent-green/20 text-accent-green' :
+                          review.recommendation === 'minor_revision' ? 'bg-accent-cyan/20 text-accent-cyan' :
+                          review.recommendation === 'major_revision' ? 'bg-accent-amber/20 text-accent-amber' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                          {review.recommendation?.replace('_', ' ')}
+                        </span>
+                        <span className="text-xs text-accent-amber">★ {review.rating}/5</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-slate-500">Summary:</span>
+                        <p className="text-slate-300 mt-0.5">{review.summary}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Strengths:</span>
+                        <p className="text-slate-300 mt-0.5">{review.strengths}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Weaknesses:</span>
+                        <p className="text-slate-300 mt-0.5">{review.weaknesses}</p>
+                      </div>
+                      {review.comments && (
+                        <div>
+                          <span className="text-slate-500">Comments:</span>
+                          <p className="text-slate-300 mt-0.5">{review.comments}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-3">
+                      Reviewed on {new Date(review.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
