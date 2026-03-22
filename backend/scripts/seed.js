@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
 require("dotenv").config();
 
 const User = require("../models/User");
@@ -20,13 +19,13 @@ const seed = async () => {
   await PointTransaction.deleteMany({});
   console.log("Cleared existing data");
 
-  // Create users
-  const hashedPass = await bcrypt.hash("password123", 12);
+  // Create users (password will be hashed by User model pre-save hook)
+  const plainPass = "password123";
 
   const admin = await User.create({
     name: "Admin User",
     email: "admin@blockreview.io",
-    password: hashedPass,
+    password: plainPass,
     role: "admin",
     institution: "BlockReview Foundation",
     points: 500,
@@ -37,7 +36,7 @@ const seed = async () => {
     {
       name: "Dr. Alice Chen",
       email: "alice@university.edu",
-      password: hashedPass,
+      password: plainPass,
       role: "publisher",
       institution: "MIT",
       points: 185,
@@ -48,7 +47,7 @@ const seed = async () => {
     {
       name: "Prof. Bob Martinez",
       email: "bob@stanford.edu",
-      password: hashedPass,
+      password: plainPass,
       role: "publisher",
       institution: "Stanford University",
       points: 120,
@@ -59,7 +58,7 @@ const seed = async () => {
     {
       name: "Dr. Priya Sharma",
       email: "priya@iit.ac.in",
-      password: hashedPass,
+      password: plainPass,
       role: "publisher",
       institution: "IIT Bombay",
       points: 60,
@@ -73,7 +72,7 @@ const seed = async () => {
     {
       name: "Dr. James Wilson",
       email: "james@oxford.ac.uk",
-      password: hashedPass,
+      password: plainPass,
       role: "reviewer",
       institution: "Oxford University",
       points: 275,
@@ -84,7 +83,7 @@ const seed = async () => {
     {
       name: "Dr. Sarah Kim",
       email: "sarah@eth.ch",
-      password: hashedPass,
+      password: plainPass,
       role: "reviewer",
       institution: "ETH Zurich",
       points: 200,
@@ -95,7 +94,7 @@ const seed = async () => {
     {
       name: "Prof. Carlos Rodriguez",
       email: "carlos@cambridge.ac.uk",
-      password: hashedPass,
+      password: plainPass,
       role: "reviewer",
       institution: "Cambridge University",
       points: 150,
@@ -108,7 +107,7 @@ const seed = async () => {
   const publicUser = await User.create({
     name: "Public User",
     email: "public@example.com",
-    password: hashedPass,
+    password: plainPass,
     role: "public",
     institution: "",
     points: 0,
